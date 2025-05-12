@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de IMC</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .calculator {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .calculator input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .calculator button {
+      padding: 10px 20px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+      max-width: 600px;
+    }
+    input, button, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0 15px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    .actions button {
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="calculator">
+  <h1>Calculadora de IMC</h1>
+  <label for="weight">Peso (kg):</label>
+  <input type="number" id="weight" placeholder="Informe o peso em kg"><br>
+
+  <label for="height">Altura (cm):</label>
+  <input type="number" id="height" placeholder="Informe a altura em cm"><br>
+
+  <button onclick="calculateIMC()">Calcular IMC</button>
+
+  <div id="result"></div>
+
+  <div class="section">
+    <h1>Receitas</h1>
+    <button onclick="loadReceitas()">Carregar Receitas</button>
+    <table id="receitas-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Tipo</th>
+          <th>Ingredientes</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 id="form-title">Adicionar Receita</h2>
+    <input type="hidden" id="receita-id">
+    <label>Nome:</label>
+    <input type="text" id="nome-receita">
+    
+    <label>Tipo:</label>
+    <select id="tipo-receita">
+      <option value="Normal">Normal</option>
+      <option value="Fit">Fit</option>
+    </select>
+
+    <label>Ingredientes:</label>
+    <textarea id="ingredientes-receita" rows="3"></textarea>
+
+    <button onclick="salvarReceita()">Salvar Receita</button>
+    <button onclick="resetForm()">Cancelar</button>
+  </div>
+</div>
+
+<script>
+  const API_URL = 'https://localhost:7209/Receita';
+
+  async function calculateIMC() {
+    const weight = parseFloat(document.getElementById('weight').value);
+    const height = parseFloat(document.getElementById('height').value) / 100; // Convertendo altura para metros
+
+    if (isNaN(weight) || isNaN(height) || weight <= 0 || height <= 0) {
+      alert('Por favor, informe um peso e altura válidos.');
+      return;
+    }
+
+    const imc = weight / (height * height);
+
+    fetch(`${API_URL}/${imc}`)
+    .then(response => {
+        if (!response.ok) {
+          throw new Error('Erro na requisição');
+        }
+        return response.json();
+    })
+    .then(data => {
+      console.log(data);
+      document.getElementById('result').innerHTML = data.nomeReceita;
+    })
+    .catch(error => {
+      console.error('Erro:', error);
+    });
+  }
+
+  async function loadReceitas() {
+    const tbody = document.querySelector('#receitas-table tbody');
+    tbody.innerHTML = '';
+
+    try {
+      const response = await fetch(API_URL);
+      const receitas = await response.json();
+
+      receitas.forEach(r => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${r.receitaId}</td>
+          <td>${r.nomeReceita}</td>
+          <td>${r.tipo}</td>
+          <td>${r.ingredientes}</td>
+          <td class="actions">
+            <button onclick="editarReceita(${r.receitaId})">Editar</button>
+            <button onclick="excluirReceita(${r.receitaId})">Excluir</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao carregar receitas.');
+    }
+  }
+
+  async function salvarReceita() {
+    const id = document.getElementById('receita-id').value;
+    const nome = document.getElementById('nome-receita').value;
+    const tipo = document.getElementById('tipo-receita').value;
+    const ingredientes = document.getElementById('ingredientes-receita').value;
+
+    const payload = {
+      nomeReceita: nome,
+      tipo: tipo,
+      ingredientes: ingredientes
+    };
+
+    try {
+      let response;
+      if (id) {
+        // Atualizar receita
+        response = await fetch(`${API_URL}/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        // Inserir nova receita
+        response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error('Erro ao salvar receita.');
+      }
+
+      resetForm();
+      loadReceitas();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar receita.');
+    }
+  }
+
+  function editarReceita(id) {
+    fetch(`${API_URL}`)
+      .then(res => res.json())
+      .then(receitas => {
+        const receita = receitas.find(r => r.receitaId === id);
+        if (!receita) return;
+
+        document.getElementById('receita-id').value = receita.receitaId;
+        document.getElementById('nome-receita').value = receita.nomeReceita;
+        document.getElementById('tipo-receita').value = receita.tipo;
+        document.getElementById('ingredientes-receita').value = receita.ingredientes;
+
+        document.getElementById('form-title').textContent = 'Editar Receita';
+      });
+  }
+
+  async function excluirReceita(id) {
+    if (!confirm('Deseja realmente excluir esta receita?')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (response.status === 204) {
+        loadReceitas();
+      } else {
+        throw new Error('Erro ao excluir');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir receita.');
+    }
+  }
+
+  function resetForm() {
+    document.getElementById('receita-id').value = '';
+    document.getElementById('nome-receita').value = '';
+    document.getElementById('tipo-receita').value = 'Normal';
+    document.getElementById('ingredientes-receita').value = '';
+    document.getElementById('form-title').textContent = 'Adicionar Receita';
+  }  
+</script>
+
+</body>
+</html>
